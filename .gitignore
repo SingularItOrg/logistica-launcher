@@ -1,0 +1,14 @@
+# Local env — copy .env.example to .env and fill in real values.
+# .env is never committed: it can contain secrets, credentials, internal URLs.
+.env
+.env.local
+.env.*.local
+
+# OS / editor cruft
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Logs and one-off artifacts
+*.log
