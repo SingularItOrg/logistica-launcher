@@ -1,6 +1,26 @@
 # Orchestration compose for the Logistica project.
 # Brings up postgres, redis, backend (Django), worker/beat (Celery), and frontend (Vite).
 
+# Shared environment block for every Django-based service (backend, worker, beat).
+# Service-specific vars (DJANGO_DEBUG, DJANGO_ALLOWED_HOSTS, CORS_*) are added per service.
+x-django-env: &django-env
+  DJANGO_SETTINGS_MODULE: config.settings.dev
+  DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY:-dev-only-not-secret}
+  DATABASE_URL: postgres://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-logistica}
+  CELERY_BROKER_URL: redis://redis:6379/0
+  CELERY_RESULT_BACKEND: redis://redis:6379/1
+  CELERY_TASK_ALWAYS_EAGER: ${CELERY_TASK_ALWAYS_EAGER:-False}
+  TRACKING_PROVIDER: ${TRACKING_PROVIDER:-apps.tracking.providers.mock.MockTrackingProvider}
+  LOG_LEVEL: ${LOG_LEVEL:-INFO}
+  FRONTEND_BASE_URL: ${FRONTEND_BASE_URL:-http://localhost:5173}
+  EMAIL_BACKEND: ${EMAIL_BACKEND:-django.core.mail.backends.console.EmailBackend}
+  EMAIL_HOST: ${EMAIL_HOST:-}
+  EMAIL_PORT: ${EMAIL_PORT:-587}
+  EMAIL_HOST_USER: ${EMAIL_HOST_USER:-}
+  EMAIL_HOST_PASSWORD: ${EMAIL_HOST_PASSWORD:-}
+  EMAIL_USE_TLS: ${EMAIL_USE_TLS:-True}
+  DEFAULT_FROM_EMAIL: ${DEFAULT_FROM_EMAIL:-no-reply@logistica.local}
+
 services:
   postgres:
     image: postgres:16-alpine
@@ -40,13 +60,9 @@ services:
       sh -c "python manage.py migrate &&
              python manage.py runserver 0.0.0.0:8000"
     environment:
-      DJANGO_SETTINGS_MODULE: config.settings.dev
-      DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY:-dev-only-not-secret}
-      DJANGO_DEBUG: "True"
-      DJANGO_ALLOWED_HOSTS: "*"
-      DATABASE_URL: postgres://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-logistica}
-      CELERY_BROKER_URL: redis://redis:6379/0
-      CELERY_RESULT_BACKEND: redis://redis:6379/1
+      <<: *django-env
+      DJANGO_DEBUG: ${DJANGO_DEBUG:-True}
+      DJANGO_ALLOWED_HOSTS: ${DJANGO_ALLOWED_HOSTS:-*}
       CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:5173}
     volumes:
       - ../logistica-backend/logistica-backend/src:/app/src
@@ -66,11 +82,7 @@ services:
       target: dev
     command: celery -A config worker -l info
     environment:
-      DJANGO_SETTINGS_MODULE: config.settings.dev
-      DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY:-dev-only-not-secret}
-      DATABASE_URL: postgres://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-logistica}
-      CELERY_BROKER_URL: redis://redis:6379/0
-      CELERY_RESULT_BACKEND: redis://redis:6379/1
+      <<: *django-env
     volumes:
       - ../logistica-backend/logistica-backend/src:/app/src
     depends_on:
@@ -87,11 +99,7 @@ services:
       target: dev
     command: celery -A config beat -l info --scheduler django_celery_beat.schedulers:DatabaseScheduler
     environment:
-      DJANGO_SETTINGS_MODULE: config.settings.dev
-      DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY:-dev-only-not-secret}
-      DATABASE_URL: postgres://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-logistica}
-      CELERY_BROKER_URL: redis://redis:6379/0
-      CELERY_RESULT_BACKEND: redis://redis:6379/1
+      <<: *django-env
     volumes:
       - ../logistica-backend/logistica-backend/src:/app/src
     depends_on:
